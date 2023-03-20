@@ -1,4 +1,4 @@
-void bzero(int *a], int n) {
+void test(int *a, int n) {
     for (int i = 0; i < n; i++)
         a[i] = 0;
 }
