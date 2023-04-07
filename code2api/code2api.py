@@ -8,16 +8,21 @@ from metalift.ir import *
 # Import grammar and target language for specific APIs
 import api.mylistapis as mylistapis
 import api.bzero as bzero
+import api.cblas_saxpy as cblas_saxpy
 
 def grammar(ci: CodeInfo):
-    g = Or(mylistapis.getGrammar(ci),
-            bzero.getGrammar(ci))
+    #g = Or(mylistapis.getGrammar(ci),
+    #        bzero.getGrammar(ci))
+    g = cblas_saxpy.getGrammar(ci)
+    #g = bzero.getGrammar(ci)
     #g = mylistapis.getGrammar(ci)
     return Synth(ci.name, g, *ci.modifiedVars, *ci.readVars)
 
 
 def targetLang():
-    return mylistapis.getTargetLang() + bzero.getTargetLang()
+    return cblas_saxpy.getTargetLang()
+    #return bzero.getTargetLang()
+    #return mylistapis.getTargetLang() + bzero.getTargetLang()
     #return mylistapis.getTargetLang()
 
 

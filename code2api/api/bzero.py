@@ -29,11 +29,9 @@ def getGrammar(ci: CodeInfo):
         i_in_bounds = And(Ge(i, IntLit(0)), Le(i, Call("list_length", Int(), a)))
         list_a_len = Ge(Call("list_length", Int(), a), IntLit(0))
         #list_len_eq = Eq(Call("list_length", Int(), a), Call("list_length", Int(), b))
-        bzero_output = Eq(Call("list_get", Int(), b, i), #IntLit(0))
-                          Call("list_get",
-                               Call("bzero", ListT(Int()),
-                                    Call("list_concat", ListT(Int()),
-                                        Call("list_get", Int(), a, i)), 0)))
+        bzero_output = Eq(b,
+                          Call("bzero", ListT(Int()), 
+                               Call("list_get", Int(), a, i)))
         api_choice = Choose(bzero_output)
         #inv = And(api_choice, And(i_in_bounds, And(list_a_len, list_len_eq)))
         inv = And(api_choice, And(i_in_bounds, list_a_len))

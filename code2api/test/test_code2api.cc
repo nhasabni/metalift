@@ -23,3 +23,17 @@ extern "C" List<int> test_bzero(List<int> a) {
         b = listAppend(b, listGet(a, i));
     return b;
 }
+
+// cblas_saxpy computes y = a*x + y
+//
+// below we return a new list z to map into pure function semantics
+// z = a*x + y
+extern "C" List<int> test_cblas1_saxpy(int a, List<int> x, List<int> y) {
+    List<int> z = newList<int>();
+
+    if (listLength(x) != listLength(y)) return z;
+
+    for (int i = 0; i < listLength(x); i++)
+        z = listAppend(z, a * listGet(x, i) + listGet(y, i));
+    return z;
+}
