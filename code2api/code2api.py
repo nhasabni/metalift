@@ -9,18 +9,24 @@ from metalift.ir import *
 import api.mylistapis as mylistapis
 import api.bzero as bzero
 import api.cblas_saxpy as cblas_saxpy
+import api.cblas_sdot as cblas_sdot
+import api.cblas_sgemv as cblas_sgemv
 
 def grammar(ci: CodeInfo):
     #g = Or(mylistapis.getGrammar(ci),
     #        bzero.getGrammar(ci))
-    g = cblas_saxpy.getGrammar(ci)
+    #g = cblas_saxpy.getGrammar(ci)
+    g = cblas_sgemv.getGrammar(ci)
+    #g = cblas_sdot.getGrammar(ci)
     #g = bzero.getGrammar(ci)
     #g = mylistapis.getGrammar(ci)
     return Synth(ci.name, g, *ci.modifiedVars, *ci.readVars)
 
 
 def targetLang():
-    return cblas_saxpy.getTargetLang()
+    return cblas_sgemv.getTargetLang()
+    #return cblas_sdot.getTargetLang()
+    #return cblas_saxpy.getTargetLang()
     #return bzero.getTargetLang()
     #return mylistapis.getTargetLang() + bzero.getTargetLang()
     #return mylistapis.getTargetLang()

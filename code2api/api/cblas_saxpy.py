@@ -47,6 +47,7 @@ def getGrammar(ci: CodeInfo):
 # cblas_saxpy(a, x, y) =
 #   return Concat(a * x[0] + y[0]), cblas_saxpy(a, x[1:], y[1:])
 #
+# TODO: Support case of incx, incy (look at stored patch)
 def getTargetLang():
     a = Var("a", Int())
     x = Var("x", ListT(Int()))

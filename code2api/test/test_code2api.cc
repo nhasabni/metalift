@@ -28,12 +28,58 @@ extern "C" List<int> test_bzero(List<int> a) {
 //
 // below we return a new list z to map into pure function semantics
 // z = a*x + y
-extern "C" List<int> test_cblas1_saxpy(int a, List<int> x, List<int> y) {
+//
+// TODO: Currently not modelling incx, incy yet.
+// https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-1/cblas-axpy.html
+extern "C" List<int> test_cblas_saxpy(int a, List<int> x, List<int> y) {
     List<int> z = newList<int>();
 
     if (listLength(x) != listLength(y)) return z;
 
     for (int i = 0; i < listLength(x); i++)
         z = listAppend(z, a * listGet(x, i) + listGet(y, i));
+    return z;
+}
+
+// cblas_sdot computes res = sum(x * y)
+//
+// TODO: Currently not modelling incx, incy yet.
+// https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-1/cblas-dot.html#GUID-93DA36DC-40CA-4C01-B883-DABAB0D378D4
+extern "C" int test_cblas_sdot(List<int> x, List<int> y) {
+    int res = 0;
+
+    if (listLength(x) != listLength(y)) return res;
+
+    for (int i = 0; i < listLength(x); i++)
+        res += listGet(x, i) * listGet(y, i);
+    return res;
+}
+
+// cblas_sdot computes z = alpha * a * x + beta * y
+//
+// TODO: Currently not modelling transpose, row/col major yet.
+// https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-1/cblas-gemv.html#GUID-25178576-05F1-4A33-8A0E-3694F0CCD242
+extern "C" List<int> test_cblas_sgemv(int alpha, List<List<int>> a,
+                                List<int>x, int beta, List<int> y) {
+    List<int> z = newList<int>();
+
+    // value of m
+    if (listLength(a) != listLength(y)) return z;
+    // value of n
+    if (listLength(listGet(a, 0)) != listLength(x)) return z;
+
+    int m = listLength(a);
+    int n = listLength(x);
+
+    // a is of size m * n, x is of size n x 1, y is of size m x 1
+    for (int i = 0; i < m; i++) {
+        int res = 0;
+        for (int j = 0; j < n; j++) {
+            // summation(a[i][j] * x[j]) over i=1 to m, j=1 to n
+            res += listGet(listGet(a, i), j) * listGet(x, j);
+        }
+        z = listAppend(z, alpha * res + beta * listGet(y, i));
+    }
+
     return z;
 }
