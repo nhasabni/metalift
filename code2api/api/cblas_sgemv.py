@@ -28,10 +28,10 @@ def getGrammar(ci: CodeInfo):
     x_y = Choose(*list_vars)
     a = Choose(*matrix_vars)
 
-    if name.startswith("inv"):  #inv
-      z = ci.modifiedVars[0] # z is out also
-      i_j = Choose(filter_types(ci.modifiedVars, Int()))
+    i_j = Choose(filter_types(ci.modifiedVars, Int()))
+    z = ci.modifiedVars[0] # z is out also
 
+    if name.startswith("inv"):  #inv
       intChoices = Choose(IntLit(0), IntLit(1))
     
       # i >= 0
@@ -44,26 +44,29 @@ def getGrammar(ci: CodeInfo):
                              Le(i_j, Call("list_length", Int(), x_y)),
                              Lt(i_j, Call("list_length", Int(), x_y)),
                              Eq(i_j, Call("list_length", Int(), x_y)))
-      # a:mxn * x:nx1 = sgemv_output : mx1
+      # a:m_n * x:n_1 = sgemv_output : m_1
       sgemv_output = Call("sgemv", ListT(Int()), Call("list_get", ListT(Int()), a, i_j), x_y)
-      # cblas_sgemv = alpha * sgemv_output + beta * y
+      # cblas_sgemv : m_1 = alpha * sgemv_output + beta * y
       cblas_sgemv_output = Choose(Eq(z, Call("cblas_sgemv", ListT(Int()), Choose(*int_vars),
                                        Call("list_take", ListT(Int()), sgemv_output, i_j),
                                        Choose(*int_vars),
                                        Call("list_take", ListT(Int()), x_y, i_j))))
-      inv = Choose(Implies(And(Eq(Call("list_length", Int(), x_y),
-                                  Call("list_length", Int(), Call("list_get", ListT(Int()), a, IntLit(0)))),
-                               Eq(Call("list_length", Int(), x_y), Call("list_length", Int(), a))),
+      inv = Choose(Implies(And(
+                                Eq(Call("list_length", Int(), x_y),
+                                   Call("list_length", Int(), Call("list_get", ListT(Int()), a, IntLit(0)))),
+                                Eq(Call("list_length", Int(), x_y), Call("list_length", Int(), a))
+                              ),
                            And(cblas_sgemv_output, And(i_lower_bound, i_upper_bound))))
       return inv
-
     else:  #ps
-      z = ci.modifiedVars[0]
-      choices = Choose(Implies(And(Eq(Call("list_length", Int(), x_y),
-                                  Call("list_length", Int(), Call("list_get", ListT(Int()), a, IntLit(0)))),
-                               Eq(Call("list_length", Int(), x_y), Call("list_length", Int(), a))),
+      sgemv_output = Call("sgemv", ListT(Int()), Call("list_get", ListT(Int()), a, i_j), x_y)
+      choices = Choose(Implies(And(
+                                    Eq(Call("list_length", Int(), x_y),
+                                       Call("list_length", Int(), Call("list_get", ListT(Int()), a, IntLit(0)))),
+                                    Eq(Call("list_length", Int(), x_y), Call("list_length", Int(), a))
+                                  ),
                                Eq(z, Call("cblas_sgemv", ListT(Int()),
-                                          Choose(*int_vars), x_y, Choose(*int_vars), x_y))))
+                                          Choose(*int_vars), sgemv_output, Choose(*int_vars), x_y))))
       return choices
 
 # 
@@ -88,7 +91,6 @@ def getTargetLang():
     beta = Var("beta", Int())
     x = Var("x", ListT(Int()))
     y = Var("y", ListT(Int()))
-    z = Var("z", ListT(Int()))
     # performs sdot(x, y) - used to implement single output element of MatMul
     sdot = FnDeclRecursive(
        "sdot",
@@ -96,15 +98,17 @@ def getTargetLang():
        Ite(
         # condition
         And(And(Gt(Call("list_length", Int(), x), IntLit(0)),
-                Gt(Call("list_length", Int(), z), IntLit(0))),
-            Eq(Call("list_length", Int(), x), Call("list_length", Int(), z))),
+                Gt(Call("list_length", Int(), y), IntLit(0))),
+            Eq(Call("list_length", Int(), x), Call("list_length", Int(), y))),
         # if
-        Add(Mul(Call("list_get", Int(), x, IntLit(0)), Call("list_get", Int(), z, IntLit(0))),
-            Call("sdot", Int(), Call("list_tail", ListT(Int()), x, 1), Call("list_tail", ListT(Int()), z, 1))),
+        Add(
+            Mul(Call("list_get", Int(), x, IntLit(0)), Call("list_get", Int(), y, IntLit(0))),
+            Call("sdot", Int(), Call("list_tail", ListT(Int()), x, 1), Call("list_tail", ListT(Int()), y, 1))
+           ),
         # else
         IntLit(0)
        ),
-      x, z
+      x, y
     )
     # performs a : m_n * x : n_1 matrix-vector multiplication to produce m_1 output.
     sgemv = FnDeclRecursive(
@@ -122,29 +126,34 @@ def getTargetLang():
        ),
        a, x
     )
-    sgemv_result = Call("sgemv", ListT(Int()), a, x)
-    # implements semantics of cblas_sgemv
+
+    def cblas_sgemv_body (alpha, a, x, beta, y):
+      # sgemv_result is of size m_1.
+      sgemv_result = Call("sgemv", ListT(Int()), a, x)
+      return Ite(# condition
+              And(
+                And(
+                  Gt(Call("list_length", Int(), sgemv_result), IntLit(0)),
+                  Gt(Call("list_length", Int(), y), IntLit(0))
+                ),
+                Eq(Call("list_length", Int(), sgemv_result), Call("list_length", Int(), y))
+              ),
+              # if
+              Call("list_prepend", ListT(Int()),
+                Add(Mul(alpha, Call("list_get", Int(), sgemv_result, IntLit(0))),
+                    Mul(beta,  Call("list_get", Int(), y, IntLit(0)))),
+                Call("cblas_sgemv", ListT(Int()),
+                      alpha, Call("list_tail", ListT(Int()), sgemv_result, IntLit(1)),
+                      beta,  Call("list_tail", ListT(Int()), y, IntLit(1)))),
+              # else
+              Call("list_empty", ListT(Int()))
+      )
+      
+    # implements semantics of cblas_sgemv: output size will be m_1.
     cblas_sgemv = FnDeclRecursive(
         "cblas_sgemv",
         ListT(Int()),
-        Ite(# condition
-            And(
-              And(
-                Gt(Call("list_length", Int(), sgemv_result), IntLit(0)),
-                Gt(Call("list_length", Int(), y), IntLit(0))
-              ),
-              Eq(Call("list_length", Int(), sgemv_result), Call("list_length", Int(), y))
-            ),
-            # if
-            Call("list_prepend", ListT(Int()),
-              Add(Mul(alpha, Call("list_get", Int(), sgemv_result, IntLit(0))),
-                  Mul(beta,  Call("list_get", Int(), y, IntLit(0)))),
-              Call("cblas_sgemv", ListT(Int()),
-                    alpha, Call("list_tail", ListT(Int()), sgemv_result, IntLit(1)),
-                    beta,  Call("list_tail", ListT(Int()), y, IntLit(1)))),
-            # else
-            Call("list_empty", ListT(Int()))
-        ),
-        alpha, sgemv_result, beta, y
+        cblas_sgemv_body(alpha, a, x, beta, y),
+        alpha, a, x, beta, y
     )
     return [cblas_sgemv]
