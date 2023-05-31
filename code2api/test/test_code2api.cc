@@ -1,4 +1,5 @@
 #include "list.h"
+#include "matrix.h"
 
 extern "C" int test_listsum(List<int> a) {
     int sum = 0;
@@ -59,16 +60,19 @@ extern "C" int test_cblas_sdot(List<int> x, List<int> y) {
 //
 // TODO: Currently not modelling transpose, row/col major yet.
 // https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2023-1/cblas-gemv.html#GUID-25178576-05F1-4A33-8A0E-3694F0CCD242
-extern "C" List<int> test_cblas_sgemv(int alpha, List<List<int>> a,
+extern "C" List<int> test_cblas_sgemv(int alpha, nestedList<int> a,
                                 List<int>x, int beta, List<int> y) {
     List<int> z = newList<int>();
 
-    // value of m
-    if (listLength(a) != listLength(y)) return z;
-    // value of n
-    if (listLength(listGet(a, 0)) != listLength(x)) return z;
+    if (nestedLength(a) <= 0 || listLength(nestedGet(a, 0)) <= 0) return z;
 
-    int m = listLength(a);
+    // value of n
+    if (listLength(nestedGet(a, 0)) != listLength(x)) return z;
+
+    // value of m
+    if (nestedLength(a) != listLength(y)) return z;
+
+    int m = listLength(y);
     int n = listLength(x);
 
     // a is of size m * n, x is of size n x 1, y is of size m x 1
@@ -76,7 +80,7 @@ extern "C" List<int> test_cblas_sgemv(int alpha, List<List<int>> a,
         int res = 0;
         for (int j = 0; j < n; j++) {
             // summation(a[i][j] * x[j]) over i=1 to m, j=1 to n
-            res += listGet(listGet(a, i), j) * listGet(x, j);
+            res += listGet(nestedGet(a, i), j) * listGet(x, j);
         }
         z = listAppend(z, alpha * res + beta * listGet(y, i));
     }
