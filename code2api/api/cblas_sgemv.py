@@ -42,11 +42,6 @@ def getGrammar(ci: CodeInfo):
       #print(*int_modified_vars)
       #i = int_modified_vars[0]
       #i = Choose(*int_modified_vars)
-      print('---------------')
-      print(int_modified_vars[0])
-      print(int_modified_vars[1])
-      print(int_modified_vars[2])
-      print('---------------')
       i = int_modified_vars[2] # i13
       temp = int_modified_vars[0] # i14
       j = int_modified_vars[1]
@@ -65,18 +60,21 @@ def getGrammar(ci: CodeInfo):
       # z[i] = alpha * sdot(a[i], x) + beta * y[i]
       outer_loop_output = Choose(Eq(z, 
                                     Call("cblas_sgemv", ListT(Int()), alpha_beta,
-                                         Call("list_list_take", ListT(Int()), a, i), x, alpha_beta, Call("list_take", ListT(Int()), y, i))))
+                                         Call("list_list_take", ListT(Int()), a, i),
+                                         x, alpha_beta, Call("list_take", ListT(Int()), y, i))))
                                         #Add(
                                         #    Mul(alpha_beta,
                                         #        Call("sdot", Int(), Call("list_list_get", ListT(Int()), a, i), x)),
                                         #    Mul(alpha_beta, Call("list_get", Int(), y, i))
                                         #)))) 
-      inv = Choose(Implies(And(
-                                Eq(Call("list_length", Int(), x),
-                                   Call("list_length", Int(), Call("list_list_get", ListT(Int()), a, IntLit(0)))),
-                                Eq(Call("list_length", Int(), y), Call("list_list_length", Int(), a))
-                              ),
-                           And(outer_loop_output, And(i_lower_bound, i_upper_bound))))
+      inv = Choose(Implies(And(Eq(Call("list_length", Int(), x),
+                                   Call("list_length", Int(),
+                                        Call("list_list_get", ListT(Int()), a, IntLit(0)))),
+                               Eq(Call("list_length", Int(), y), Call("list_list_length", Int(), a)),
+                               Gt(Call("list_length", Int(), a), IntLit(1))
+                           ),
+                           And(outer_loop_output, And(i_lower_bound, i_upper_bound))
+                           ))
       return inv
     
     elif name.startswith("inv1"):  #inv for inner loop
@@ -92,11 +90,11 @@ def getGrammar(ci: CodeInfo):
                              Le(i, intChoices), Lt(i, intChoices),
                              Eq(i, intChoices))
       # i <= listlen
-      i_upper_bound = Choose(Ge(i, Call("list_length", Int(), y)),
-                             Gt(i, Call("list_length", Int(), y)),
-                             Le(i, Call("list_length", Int(), y)),
-                             Lt(i, Call("list_length", Int(), y)),
-                             Eq(i, Call("list_length", Int(), y)))
+      i_upper_bound = Choose(Ge(i, Call("list_length", Int(), a)),
+                             Gt(i, Call("list_length", Int(), a)),
+                             Le(i, Call("list_length", Int(), a)),
+                             Lt(i, Call("list_length", Int(), a)),
+                             Eq(i, Call("list_length", Int(), a)))
       # j >= 0
       j_lower_bound = Choose(Ge(j, intChoices), Gt(j, intChoices),
                              Le(j, intChoices), Lt(j, intChoices),
@@ -108,10 +106,17 @@ def getGrammar(ci: CodeInfo):
                              Lt(j, Call("list_length", Int(), x)),
                              Eq(j, Call("list_length", Int(), x)))
       # One iteration of inner loop is performing SDOT: for some i, j=0 to n: ret += a[i][j] * x[j]
-      inner_loop_output = Choose(Eq(temp, Add(temp,
-                                              Mul(Call("list_get", Int(),
-                                                     Call("list_list_get", ListT(Int()), a, i), j),
-                                                  Call("list_get", Int(), x, j)))))
+      #inner_loop_output = Choose(Eq(temp, Add(temp,
+      #                                        Mul(Call("list_get", Int(),
+      #                                               Call("list_list_get", ListT(Int()), a, i), j),
+      #                                            Call("list_get", Int(), x, j)))))
+      inner_loop_output = Choose(Eq(temp,
+                                    Call("sdot", Int(),
+                                         Call("list_take", ListT(Int()),
+                                              Call("list_list_get", ListT(Int()), a, i), j),
+                                         Call("list_take", ListT(Int()), x, j)
+                                    ))
+                                 )
       # and using SDOT output to perform cblas_sgemv:
       # contents of z in inner_loop = alpha * sdot(a[i-1] * x) + beta * y[i-1]
       #outer_loop_output = Choose(Eq(z,
@@ -127,13 +132,14 @@ def getGrammar(ci: CodeInfo):
       inv = Choose(Implies(And(
                                 Eq(Call("list_length", Int(), x),
                                    Call("list_length", Int(), Call("list_list_get", ListT(Int()), a, IntLit(0)))),
-                                Eq(Call("list_length", Int(), y), Call("list_list_length", Int(), a))
+                                Eq(Call("list_length", Int(), y), Call("list_list_length", Int(), a)),
+                                Gt(Call("list_length", Int(), a), IntLit(1))
                               ),
                            And(
                               And(inner_loop_output,
                                   And(
-                                    And(i_lower_bound, i_upper_bound),
-                                    And(j_lower_bound, j_upper_bound)
+                                    i_lower_bound, j_lower_bound,
+                                    i_upper_bound, j_upper_bound
                                   ),
                               ),
                               outer_loop_output)))
@@ -144,7 +150,8 @@ def getGrammar(ci: CodeInfo):
       choices = Choose(Implies(And(
                                     Eq(Call("list_length", Int(), x),
                                        Call("list_length", Int(), Call("list_list_get", ListT(Int()), a, IntLit(0)))),
-                                    Eq(Call("list_length", Int(), y), Call("list_list_length", Int(), a))
+                                    Eq(Call("list_length", Int(), y), Call("list_list_length", Int(), a)),
+                                    Gt(Call("list_length", Int(), a), IntLit(1))
                                   ),
                                Eq(z, Call("cblas_sgemv", ListT(Int()),
                                           alpha_beta, a, x, alpha_beta, y))))
@@ -215,16 +222,10 @@ def getTargetLang():
         Ite(# condition
               And(
                And(
-                  And(
-                     Gt(Call("list_list_length", Int(), a), IntLit(0)),
-                     Gt(Call("list_length", Int(),
-                             Call("list_list_get", ListT(Int()), a, IntLit(0))), IntLit(0))
-                  ),
-                  Eq(Call("list_length", Int(),
-                          Call("list_list_get", ListT(Int()), a, IntLit(0))),
-                     Call("list_length", Int(), x))
+                  Gt(Call("list_length", Int(), a), IntLit(0)),
+                  Gt(Call("list_length", Int(), y), IntLit(0))
                ),
-               Eq(Call("list_list_length", Int(), a), Call("list_length", Int(), y))
+               Eq(Call("list_length", Int(), a), Call("list_length", Int(), y))
               ),
               # if
               Call("list_prepend", ListT(Int()),

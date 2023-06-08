@@ -130,6 +130,14 @@ def toExpr(
                 list_expr,
                 toExpr(ast[2], fnsType, varType, choices),
             )
+        elif ast[0] == "list-list-ref-noerr":
+            list_expr = toExpr(ast[1], fnsType, varType, choices)
+            return Call(
+                "list_list_get",
+                list_expr.type,
+                list_expr,
+                toExpr(ast[2], fnsType, varType, choices),
+            )
         elif ast[0] == "list-tail-noerr":
             list_expr = toExpr(ast[1], fnsType, varType, choices)
             return Call(

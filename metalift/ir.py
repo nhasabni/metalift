@@ -361,6 +361,7 @@ class Expr:
         "list_length": "length",
         "list_list_length": "list-list-length",
         "list_take": "list-take-noerr",
+        "list_list_take": "list-list-take-noerr",
         "list_prepend": "list-prepend",
         "list_list_prepend": "list-list-prepend",
         "list_eq": "equal?",
